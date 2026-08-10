@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PedBurn — Pediatric TBSA &amp; Fluid Calculator (Prototype)</title>
+<style>
+  :root {
+    --teal: #0f766e;
+    --teal-dark: #115e59;
+    --teal-light: #ccfbf1;
+    --bg: #f4f7f7;
+    --card: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --border: #e2e8f0;
+    --warn-bg: #fef3c7;
+    --warn-ink: #92400e;
+    --danger: #b91c1c;
+    --skin: #f3e2d4;
+    --skin-stroke: #c9a892;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.45;
+  }
+  header {
+    background: var(--teal);
+    color: #fff;
+    padding: 14px 20px;
+  }
+  header h1 { margin: 0; font-size: 1.15rem; font-weight: 700; }
+  header p { margin: 2px 0 0; font-size: 0.8rem; opacity: 0.9; }
+  .disclaimer {
+    background: var(--warn-bg);
+    color: var(--warn-ink);
+    font-size: 0.78rem;
+    padding: 6px 20px;
+    border-bottom: 1px solid #fcd34d;
+  }
+  main {
+    display: grid;
+    grid-template-columns: 290px 1fr 340px;
+    gap: 16px;
+    padding: 16px 20px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr 1fr; } .panel-results { grid-column: 1 / -1; } }
+  @media (max-width: 700px)  { main { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .card h2 {
+    margin: 0 0 12px;
+    font-size: 0.95rem;
+    color: var(--teal-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  label { display: block; font-size: 0.8rem; color: var(--muted); margin: 10px 0 3px; }
+  input, select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: #fff;
+  }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .checkline { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.85rem; color: var(--ink); }
+  .checkline input { width: auto; }
+  .agenote { font-size: 0.78rem; color: var(--muted); margin-top: 8px; }
+  .figures { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .figure { text-align: center; }
+  .figure svg { width: 100%; max-width: 250px; height: auto; touch-action: manipulation; display: block; }
+  .figwrap { position: relative; display: inline-block; }
+  .figwrap canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
+  .modebar { display: flex; gap: 6px; justify-content: center; margin-bottom: 10px; }
+  .modebtn { flex: none; padding: 7px 14px; font-size: 0.8rem; border-radius: 999px; }
+  .modebtn.active { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .figure .cap { font-size: 0.78rem; color: var(--muted); font-weight: 600; letter-spacing: 0.05em; }
+  .maphint { text-align: center; font-size: 0.78rem; color: var(--muted); margin: 8px 0 0; }
+  .legend { display: flex; gap: 10px; justify-content: center; margin-top: 8px; flex-wrap: wrap; font-size: 0.72rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .legend i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; border: 1px solid var(--skin-stroke); }
+  svg .region { cursor: pointer; stroke: var(--skin-stroke); stroke-width: 1.2; transition: filter 0.1s; }
+  svg .region:hover { filter: brightness(0.93); }
+  .tbsa-big {
+    text-align: center;
+    background: var(--teal-light);
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 12px;
+  }
+  .tbsa-big .val { font-size: 2.2rem; font-weight: 800; color: var(--teal-dark); }
+  .tbsa-big .lbl { font-size: 0.75rem; color: var(--teal-dark); text-transform: uppercase; letter-spacing: 0.05em; }
+  table.regions, table.plan { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 6px; }
+  table.regions td, table.plan td, table.plan th {
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.regions td:last-child, table.plan td:last-child { text-align: right; white-space: nowrap; }
+  table.plan th { text-align: left; font-size: 0.72rem; color: var(--muted); text-transform: uppercase; }
+  .fluid-line { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.88rem; }
+  .fluid-line b { color: var(--teal-dark); }
+  .rate-now {
+    background: var(--teal);
+    color: #fff;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin: 12px 0;
+    text-align: center;
+  }
+  .rate-now .val { font-size: 1.6rem; font-weight: 800; }
+  .rate-now .lbl { font-size: 0.72rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.05em; }
+  .warn { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 8px 10px; font-size: 0.8rem; margin: 8px 0; }
+  .placeholder { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 20px 6px; }
+  .btnbar { display: flex; gap: 8px; margin-top: 14px; }
+  button {
+    flex: 1;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #fff;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  button.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+  footer { text-align: center; font-size: 0.72rem; color: var(--muted); padding: 14px; }
+  .samplebar { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .samplebar button { flex: none; text-align: left; font-weight: 500; font-size: 0.78rem; padding: 7px 10px; }
+  #photoWrap img { width: 100%; border-radius: 10px; margin-top: 8px; border: 1px solid var(--border); }
+  #photoWrap .photonote { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+  #testOut { margin-top: 10px; }
+  #testOut table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+  #testOut td { padding: 3px 4px; border-bottom: 1px solid var(--border); }
+  #testOut td:last-child { text-align: right; }
+  .pass { color: #15803d; font-weight: 700; }
+  .fail { color: var(--danger); font-weight: 700; }
+  .testbanner { border-radius: 8px; padding: 8px 10px; font-size: 0.82rem; font-weight: 700; text-align: center; margin-bottom: 6px; }
+  .testbanner.ok { background: #dcfce7; color: #15803d; }
+  .testbanner.bad { background: #fee2e2; color: var(--danger); }
+  @media print {
+    header, .disclaimer, .panel-map, .btnbar, footer .noprint { display: none !important; }
+    main { display: block; padding: 0; }
+    .card { border: none; page-break-inside: avoid; }
+    body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>PedBurn — Pediatric Burn TBSA &amp; Fluid Calculator</h1>
+  <p>Age-adjusted Lund–Browder body map · Parkland resuscitation planner</p>
+</header>
+<div class="disclaimer">⚠️ Research prototype — not a medical device. All outputs must be verified by the treating clinician before any clinical use.</div>
+
+<main>
+  <!-- ══════════ PATIENT PANEL ══════════ -->
+  <section class="card panel-patient">
+    <h2>Patient</h2>
+    <div class="row2">
+      <div><label>Age — years</label><input type="number" id="ageY" min="0" max="17" step="1" value="2"></div>
+      <div><label>Age — months</label><input type="number" id="ageM" min="0" max="11" step="1" value="0"></div>
+    </div>
+    <label>Weight (kg)</label>
+    <input type="number" id="weight" min="1" max="120" step="0.1" placeholder="e.g. 12.5">
+    <label>Date &amp; time of burn injury</label>
+    <input type="datetime-local" id="burnTime">
+    <label>Fluids already given since injury (mL)</label>
+    <input type="number" id="givenMl" min="0" step="10" value="0">
+    <label>Resuscitation formula</label>
+    <select id="formulaConst">
+      <option value="3" selected>Pediatric modified Parkland — 3 mL/kg/%TBSA</option>
+      <option value="4">Classic Parkland — 4 mL/kg/%TBSA</option>
+    </select>
+    <div class="checkline">
+      <input type="checkbox" id="maintToggle" checked>
+      <label for="maintToggle" style="margin:0;color:var(--ink)">Maintenance fluids (4-2-1) — required in children</label>
+    </div>
+    <label>Clinical photo of the burn (optional)</label>
+    <input type="file" id="photoIn" accept="image/*" capture="environment">
+    <div class="samplebar">
+      <button type="button" data-img="sample_images/sample_1_infant_trunk_scald.jpg">Sample 1 — infant trunk scald</button>
+      <button type="button" data-img="sample_images/sample_3_child_chest_arm_scald.jpg">Sample 2 — child chest &amp; arm scald</button>
+      <button type="button" data-img="sample_images/sample_2_limb_blister_burn.jpg">Sample 3 — limb blister burn</button>
+    </div>
+    <div id="photoWrap"></div>
+    <div class="agenote" id="ageBandNote"></div>
+    <div class="btnbar">
+      <button id="resetBtn">Reset burns</button>
+      <button class="primary" onclick="window.print()">Print summary</button>
+    </div>
+    <div class="btnbar">
+      <button id="testBtn">▶ Run self-test (proof of correctness)</button>
+    </div>
+    <div id="testOut"></div>
+  </section>
+
+  <!-- ══════════ BODY MAP ══════════ -->
+  <section class="card panel-map">
+    <h2>Body map — mark the burned area</h2>
+    <div class="modebar">
+      <button type="button" id="modeTap" class="modebtn active">Tap regions</button>
+      <button type="button" id="modeDraw" class="modebtn">✏️ Draw exact area</button>
+      <button type="button" id="modeErase" class="modebtn">Eraser</button>
+    </div>
+    <div class="figures">
+      <div class="figure"><div class="cap">FRONT</div><div class="figwrap"><svg id="svgFront" viewBox="0 0 220 360" xmlns="http://www.w3.org/2000/svg"></svg><canvas id="cvFront" width="660" height="1080"></canvas></div></div>
+      <div class="figure"><div class="cap">BACK</div><div class="figwrap"><svg id="svgBack" viewBox="0 0 220 360" xmlns="http://www.w3.org/2000/svg"></svg><canvas id="cvBack" width="660" height="1080"></canvas></div></div>
+    </div>
+    <p class="maphint" id="mapHint">Each tap cycles the burned fraction of that region: 0 → ¼ → ½ → ¾ → full → 0</p>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <!-- ══════════ RESULTS PANEL ══════════ -->
+  <section class="card panel-results">
+    <h2>Assessment &amp; fluid plan</h2>
+    <div class="tbsa-big"><div class="val" id="tbsaVal">0.0%</div><div class="lbl">Total body surface area burned</div></div>
+    <div id="regionList"></div>
+    <div id="fluidOut"></div>
+  </section>
+</main>
+
+<footer>
+  Surface-area weights: pediatric Lund–Browder chart (age columns 0 / 1 / 5 / 10 y). Pediatric modified Parkland: 3 mL × kg × %TBSA over 24 h from injury (½ in first 8 h) + 4-2-1 maintenance; classic 4 mL selectable.<br>
+  <span class="noprint">Prototype v0.1 — body-map input; AI photo segmentation module planned.</span>
+</footer>
+
+<script>
+"use strict";
+
+/* ══════════════════════ 1. LUND–BROWDER REFERENCE DATA ══════════════════════
+   Source: pediatric Lund–Browder chart supplied by the clinical lead.
+   Age columns: 0 (<1 y), 1 (1–4 y), 5 (5–9 y), 10 (≥10 y).
+   Values are % of total BSA per region PER SIDE shown.
+   Buttocks carry no printed value on the chart; standard 2.5% each is used
+   (this makes the age-0 column sum to exactly 100%). Rounded columns for
+   older ages sum slightly above 100%, so computed TBSA is capped at 100%. */
+
+const AGE_COLS = [0, 1, 5, 10];
+const HEAD  = { 0: 10,  1: 9, 5: 7, 10: 6 };   // A / D — half of head+neck
+const THIGH = { 0: 3,   1: 3, 5: 4, 10: 5 };   // B / E — half of one thigh
+const LEG   = { 0: 2,   1: 3, 5: 3, 10: 3 };   // C / F — half of one lower leg
+
+function ageBand(totalYears) {
+  if (totalYears < 1)  return 0;
+  if (totalYears < 5)  return 1;
+  if (totalYears < 10) return 5;
+  return 10;
+}
+
+/* Regions: pct is a function of age band. Sides are PATIENT left/right. */
+const REGIONS = [
+  { id: "head_f",   name: "Head & neck (front)",  view: "F", pct: a => HEAD[a] },
+  { id: "head_b",   name: "Head & neck (back)",   view: "B", pct: a => HEAD[a] },
+  { id: "trunk_f",  name: "Trunk (front)",        view: "F", pct: () => 13 },
+  { id: "trunk_b",  name: "Trunk (back)",         view: "B", pct: () => 13 },
+  { id: "genit",    name: "Genitalia / perineum", view: "F", pct: () => 1 },
+  { id: "butt_l",   name: "Buttock (left)",       view: "B", pct: () => 2.5 },
+  { id: "butt_r",   name: "Buttock (right)",      view: "B", pct: () => 2.5 },
+  { id: "ua_r_f",   name: "R upper arm (front)",  view: "F", pct: () => 2 },
+  { id: "ua_l_f",   name: "L upper arm (front)",  view: "F", pct: () => 2 },
+  { id: "ua_r_b",   name: "R upper arm (back)",   view: "B", pct: () => 2 },
+  { id: "ua_l_b",   name: "L upper arm (back)",   view: "B", pct: () => 2 },
+  { id: "fa_r_f",   name: "R forearm (front)",    view: "F", pct: () => 2 },
+  { id: "fa_l_f",   name: "L forearm (front)",    view: "F", pct: () => 2 },
+  { id: "fa_r_b",   name: "R forearm (back)",     view: "B", pct: () => 2 },
+  { id: "fa_l_b",   name: "L forearm (back)",     view: "B", pct: () => 2 },
+  { id: "hand_r_f", name: "R hand (front)",       view: "F", pct: () => 1 },
+  { id: "hand_l_f", name: "L hand (front)",       view: "F", pct: () => 1 },
+  { id: "hand_r_b", name: "R hand (back)",        view: "B", pct: () => 1 },
+  { id: "hand_l_b", name: "L hand (back)",        view: "B", pct: () => 1 },
+  { id: "th_r_f",   name: "R thigh (front)",      view: "F", pct: a => THIGH[a] },
+  { id: "th_l_f",   name: "L thigh (front)",      view: "F", pct: a => THIGH[a] },
+  { id: "th_r_b",   name: "R thigh (back)",       view: "B", pct: a => THIGH[a] },
+  { id: "th_l_b",   name: "L thigh (back)",       view: "B", pct: a => THIGH[a] },
+  { id: "lg_r_f",   name: "R lower leg (front)",  view: "F", pct: a => LEG[a] },
+  { id: "lg_l_f",   name: "L lower leg (front)",  view: "F", pct: a => LEG[a] },
+  { id: "lg_r_b",   name: "R lower leg (back)",   view: "B", pct: a => LEG[a] },
+  { id: "lg_l_b",   name: "L lower leg (back)",   view: "B", pct: a => LEG[a] },
+  { id: "ft_r_f",   name: "R foot (front)",       view: "F", pct: () => 2 },
+  { id: "ft_l_f",   name: "L foot (front)",       view: "F", pct: () => 2 },
+  { id: "ft_r_b",   name: "R foot (back)",        view: "B", pct: () => 2 },
+  { id: "ft_l_b",   name: "L foot (back)",        view: "B", pct: () => 2 },
+];
+
+/* ══════════════════════ 2. BODY-MAP GEOMETRY (toddler proportions) ═════════
+   viewBox 0 0 220 360. In the FRONT view the patient's RIGHT side is on the
+   viewer's LEFT; in the BACK view sides are not mirrored. */
+
+function G(id, shape) { return Object.assign({ id }, shape); }
+const RR = (x, y, w, h, rx) => ({ t: "rect", x, y, w, h, rx });
+const EL = (cx, cy, rx, ry) => ({ t: "ellipse", cx, cy, rx, ry });
+
+const GEOM_FRONT = [
+  G("head_f",   EL(110, 46, 33, 38)),
+  G("trunk_f",  RR(73, 86, 74, 100, 20)),
+  G("ua_r_f",   RR(43, 92, 26, 48, 12)),
+  G("ua_l_f",   RR(151, 92, 26, 48, 12)),
+  G("fa_r_f",   RR(41, 142, 24, 44, 10)),
+  G("fa_l_f",   RR(155, 142, 24, 44, 10)),
+  G("hand_r_f", RR(39, 188, 24, 24, 9)),
+  G("hand_l_f", RR(157, 188, 24, 24, 9)),
+  G("genit",    RR(97, 187, 26, 14, 6)),
+  G("th_r_f",   RR(73, 202, 36, 60, 14)),
+  G("th_l_f",   RR(111, 202, 36, 60, 14)),
+  G("lg_r_f",   RR(77, 264, 30, 56, 12)),
+  G("lg_l_f",   RR(113, 264, 30, 56, 12)),
+  G("ft_r_f",   RR(73, 322, 32, 18, 8)),
+  G("ft_l_f",   RR(115, 322, 32, 18, 8)),
+];
+const GEOM_BACK = [
+  G("head_b",   EL(110, 46, 33, 38)),
+  G("trunk_b",  RR(73, 86, 74, 88, 20)),
+  G("ua_l_b",   RR(43, 92, 26, 48, 12)),
+  G("ua_r_b",   RR(151, 92, 26, 48, 12)),
+  G("fa_l_b",   RR(41, 142, 24, 44, 10)),
+  G("fa_r_b",   RR(155, 142, 24, 44, 10)),
+  G("hand_l_b", RR(39, 188, 24, 24, 9)),
+  G("hand_r_b", RR(157, 188, 24, 24, 9)),
+  G("butt_l",   RR(73, 176, 36, 24, 11)),
+  G("butt_r",   RR(111, 176, 36, 24, 11)),
+  G("th_l_b",   RR(73, 202, 36, 60, 14)),
+  G("th_r_b",   RR(111, 202, 36, 60, 14)),
+  G("lg_l_b",   RR(77, 264, 30, 56, 12)),
+  G("lg_r_b",   RR(113, 264, 30, 56, 12)),
+  G("ft_l_b",   RR(73, 322, 32, 18, 8)),
+  G("ft_r_b",   RR(115, 322, 32, 18, 8)),
+];
+
+/* ══════════════════════ 3. STATE & RENDERING ══════════════════════ */
+
+const FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
+const FRAC_LABEL = { 0: "0", 0.25: "¼", 0.5: "½", 0.75: "¾", 1: "Full" };
+const FILL = { 0: "var(--skin)", 0.25: "#f8c9ab", 0.5: "#f19a6f", 0.75: "#e5623c", 1: "#c02d14" };
+const state = {};                       // regionId -> fraction
+REGIONS.forEach(r => state[r.id] = 0);
+const regionById = Object.fromEntries(REGIONS.map(r => [r.id, r]));
+
+const SVGNS = "http://www.w3.org/2000/svg";
+function buildFigure(svgEl, geoms) {
+  geoms.forEach(g => {
+    let el;
+    if (g.t === "ellipse") {
+      el = document.createElementNS(SVGNS, "ellipse");
+      el.setAttribute("cx", g.cx); el.setAttribute("cy", g.cy);
+      el.setAttribute("rx", g.rx); el.setAttribute("ry", g.ry);
+    } else {
+      el = document.createElementNS(SVGNS, "rect");
+      el.setAttribute("x", g.x); el.setAttribute("y", g.y);
+      el.setAttribute("width", g.w); el.setAttribute("height", g.h);
+      el.setAttribute("rx", g.rx);
+    }
+    el.classList.add("region");
+    el.dataset.region = g.id;
+    el.setAttribute("fill", FILL[0]);
+    el.addEventListener("click", () => cycleRegion(g.id));
+    svgEl.appendChild(el);
+    const title = document.createElementNS(SVGNS, "title");
+    el.appendChild(title);
+  });
+}
+
+function cycleRegion(id) {
+  if (typeof paintMode !== "undefined" && paintMode !== "tap") return;
+  let i = FRACTIONS.indexOf(state[id]);
+  if (i < 0) {                       // drawn (continuous) value → snap to next quarter up
+    i = FRACTIONS.findIndex(f => f >= state[id]);
+    i = (i < 0 ? FRACTIONS.length : i) - 1;
+  }
+  state[id] = FRACTIONS[(i + 1) % FRACTIONS.length];
+  clearRegionPaint(id);
+  update();
+}
+
+function paintRegions(currentBand) {
+  document.querySelectorAll("svg .region").forEach(el => {
+    const id = el.dataset.region;
+    const f = state[id];
+    const bucket = f === 0 ? 0 : f <= 0.25 ? 0.25 : f <= 0.5 ? 0.5 : f <= 0.75 ? 0.75 : 1;
+    el.setAttribute("fill", FILL[bucket]);
+    const r = regionById[id];
+    el.querySelector("title").textContent =
+      `${r.name} — ${r.pct(currentBand)}% of BSA — burned: ${Math.round(f * 100)}%`;
+  });
+}
+
+function buildLegend() {
+  const lg = document.getElementById("legend");
+  lg.innerHTML = FRACTIONS.map(f =>
+    `<span><i style="background:${f === 0 ? "#f3e2d4" : FILL[f]}"></i>${f === 0 ? "Unburned" : FRAC_LABEL[f] + " burned"}</span>`
+  ).join("");
+}
+
+/* ══════════════════════ 4. CALCULATIONS ══════════════════════ */
+
+function getAgeYears() {
+  const y = parseFloat(document.getElementById("ageY").value) || 0;
+  const m = parseFloat(document.getElementById("ageM").value) || 0;
+  return y + m / 12;
+}
+
+function computeTBSA(band) {
+  let sum = 0;
+  const rows = [];
+  REGIONS.forEach(r => {
+    const f = state[r.id];
+    if (f > 0) {
+      const contrib = r.pct(band) * f;
+      sum += contrib;
+      rows.push({ name: r.name, frac: f, contrib });
+    }
+  });
+  return { tbsa: Math.min(sum, 100), raw: sum, rows };
+}
+
+function maintenanceRate(kg) {           // Holliday–Segar 4-2-1 (mL/h)
+  if (kg <= 0) return 0;
+  if (kg <= 10) return 4 * kg;
+  if (kg <= 20) return 40 + 2 * (kg - 10);
+  return 60 + 1 * (kg - 20);
+}
+
+const fmt = n => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+
+function fluidPlanHTML(tbsa, kg, burnTimeStr, givenMl, withMaint, mlPerKg) {
+  if (tbsa <= 0) return `<div class="placeholder">Mark burned regions on the body map to generate the fluid plan.<br><br>Count only partial-thickness (2nd-degree) and full-thickness burns — superficial (1st-degree) erythema is excluded from TBSA.</div>`;
+  if (!kg)      return `<div class="placeholder">Enter the patient's weight to generate the fluid plan.</div>`;
+
+  const total24 = mlPerKg * kg * tbsa;
+  const half = total24 / 2;
+  let html = "";
+
+  if (tbsa < 10) {
+    html += `<div class="warn">TBSA &le; 10% — formal IV resuscitation is generally indicated in children only for partial/full-thickness burns &gt;10% TBSA. Below that, oral + maintenance fluids usually suffice; formula shown for reference.</div>`;
+  }
+
+  html += `<div class="fluid-line"><span>Resuscitation total, first 24 h (${mlPerKg} mL × ${kg} kg × ${tbsa.toFixed(1)}%)</span><b>${fmt(total24)} mL</b></div>`;
+  html += `<div class="fluid-line"><span>First 8 h from injury (½)</span><b>${fmt(half)} mL</b></div>`;
+  html += `<div class="fluid-line"><span>Next 16 h (½)</span><b>${fmt(half)} mL (${fmt(half / 16)} mL/h)</b></div>`;
+
+  const maint = withMaint ? maintenanceRate(kg) : 0;
+  if (withMaint) {
+    html += `<div class="fluid-line"><span>Maintenance (4-2-1 rule)</span><b>${fmt(maint)} mL/h</b></div>`;
+  }
+
+  // Current recommended rate, adjusted for time already elapsed since the burn
+  const burnTime = burnTimeStr ? new Date(burnTimeStr) : null;
+  if (!burnTime || isNaN(burnTime)) {
+    html += `<div class="warn">Enter the time of injury to get the current infusion rate (the first-half volume runs over the first 8 h <i>from the burn</i>, not from presentation).</div>`;
+  } else {
+    const elapsed = (Date.now() - burnTime.getTime()) / 3.6e6;
+    if (elapsed < 0) {
+      html += `<div class="warn">Time of injury is in the future — check the entry.</div>`;
+    } else if (elapsed >= 24) {
+      html += `<div class="warn">More than 24 h since injury — the Parkland formula no longer applies. Fluid management should follow ongoing clinical assessment (urine output, perfusion).</div>`;
+    } else {
+      let resusRate, phaseNote;
+      if (elapsed < 8) {
+        const remaining1 = Math.max(half - givenMl, 0);
+        resusRate = remaining1 / (8 - elapsed);
+        phaseNote = `Phase 1 — ${fmt(remaining1)} mL of the first half remains, to run over the ${(8 - elapsed).toFixed(1)} h left of the 8-h window.`;
+        if (givenMl > half) phaseNote += ` Fluids given already exceed the first-half volume — reassess before continuing.`;
+      } else {
+        const dueByNow = half + (half * (elapsed - 8) / 16);
+        const remainingTotal = Math.max(total24 - givenMl, 0);
+        resusRate = remainingTotal / (24 - elapsed);
+        phaseNote = `Phase 2 (8–24 h). Volume due by now per formula: ${fmt(dueByNow)} mL; given so far: ${fmt(givenMl)} mL. Remaining ${fmt(remainingTotal)} mL spread over the ${(24 - elapsed).toFixed(1)} h left — catch-up pacing is a clinician decision.`;
+      }
+      const nowRate = resusRate + maint;
+      html += `<div class="rate-now"><div class="val">${fmt(nowRate)} mL/h</div><div class="lbl">Recommended rate now${withMaint ? " (incl. maintenance)" : ""} — lactated Ringer's</div></div>`;
+      html += `<div class="warn" style="background:#e0f2f1;color:#0f5132">${phaseNote} Elapsed since burn: ${elapsed.toFixed(1)} h.</div>`;
+    }
+  }
+  html += `<div class="warn">Titrate to urine output (target ≈1 mL/kg/h in children) and clinical response. Formula volumes are a starting point, not a target.</div>`;
+  return html;
+}
+
+/* ══════════════════════ 5. MAIN UPDATE LOOP ══════════════════════ */
+
+function update() {
+  const age = getAgeYears();
+  const band = ageBand(age);
+  const bandLabel = { 0: "<1 y", 1: "1–4 y", 5: "5–9 y", 10: "≥10 y" }[band];
+  document.getElementById("ageBandNote").textContent =
+    `Lund–Browder age column in use: ${bandLabel} (head ${HEAD[band]}%, ½-thigh ${THIGH[band]}%, ½-lower-leg ${LEG[band]}% per side)`;
+
+  paintRegions(band);
+
+  const { tbsa, rows } = computeTBSA(band);
+  document.getElementById("tbsaVal").textContent = tbsa.toFixed(1) + "%";
+
+  const listEl = document.getElementById("regionList");
+  if (rows.length === 0) {
+    listEl.innerHTML = `<div class="placeholder">No burned regions marked yet.</div>`;
+  } else {
+    listEl.innerHTML = `<table class="regions">` + rows.map(r =>
+      `<tr><td>${r.name}</td><td>${FRAC_LABEL[r.frac] ?? Math.round(r.frac * 100) + "%"}</td><td>${r.contrib.toFixed(2)}%</td></tr>`
+    ).join("") + `</table>`;
+  }
+
+  const kg = parseFloat(document.getElementById("weight").value) || 0;
+  const given = parseFloat(document.getElementById("givenMl").value) || 0;
+  const withMaint = document.getElementById("maintToggle").checked;
+  const mlPerKg = parseFloat(document.getElementById("formulaConst").value);
+  document.getElementById("fluidOut").innerHTML =
+    fluidPlanHTML(tbsa, kg, document.getElementById("burnTime").value, given, withMaint, mlPerKg);
+}
+
+buildFigure(document.getElementById("svgFront"), GEOM_FRONT);
+buildFigure(document.getElementById("svgBack"), GEOM_BACK);
+buildLegend();
+
+/* ══════════════════════ 3b. DRAW MODE — trace the exact burned area ══════
+   A canvas overlays each figure. Strokes are counted pixel-by-pixel against
+   a hidden region-index map, so each region's burned fraction equals the
+   painted share of its true area — no quarter-step rounding. */
+
+let paintMode = "tap";
+const PSCALE = 3, BRUSH = 7;            // canvas is viewBox ×3; brush radius in viewBox units
+
+const painters = [
+  { cvId: "cvFront", svgId: "svgFront", geoms: GEOM_FRONT },
+  { cvId: "cvBack",  svgId: "svgBack",  geoms: GEOM_BACK  },
+].map(cfg => {
+  const cv = document.getElementById(cfg.cvId);
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  const shape = (c, g) => {
+    c.beginPath();
+    if (g.t === "ellipse") c.ellipse(g.cx * PSCALE, g.cy * PSCALE, g.rx * PSCALE, g.ry * PSCALE, 0, 0, 2 * Math.PI);
+    else if (c.roundRect) c.roundRect(g.x * PSCALE, g.y * PSCALE, g.w * PSCALE, g.h * PSCALE, g.rx * PSCALE);
+    else c.rect(g.x * PSCALE, g.y * PSCALE, g.w * PSCALE, g.h * PSCALE);
+    c.fill();
+  };
+  const map = document.createElement("canvas");
+  map.width = cv.width; map.height = cv.height;
+  const mctx = map.getContext("2d", { willReadFrequently: true });
+  cfg.geoms.forEach((g, i) => { mctx.fillStyle = `rgb(${i + 1},0,0)`; shape(mctx, g); });
+  const mapData = mctx.getImageData(0, 0, map.width, map.height).data;
+  const totals = new Array(cfg.geoms.length).fill(0);
+  for (let p = 0; p < mapData.length; p += 4) if (mapData[p + 3] > 0) totals[mapData[p] - 1]++;
+  return { cv, ctx, mapData, totals, geoms: cfg.geoms, svg: document.getElementById(cfg.svgId), shape };
+});
+
+function recountPainter(pt) {
+  const d = pt.ctx.getImageData(0, 0, pt.cv.width, pt.cv.height).data;
+  const counts = new Array(pt.geoms.length).fill(0);
+  for (let p = 0; p < d.length; p += 4)
+    if (d[p + 3] > 60 && pt.mapData[p + 3] > 0) counts[pt.mapData[p] - 1]++;
+  pt.geoms.forEach((g, i) => {
+    const f = pt.totals[i] ? counts[i] / pt.totals[i] : 0;
+    state[g.id] = f < 0.005 ? 0 : Math.min(f, 1);
+  });
+  update();
+}
+
+function clearRegionPaint(id) {
+  if (typeof painters === "undefined") return;
+  painters.forEach(pt => {
+    const g = pt.geoms.find(x => x.id === id);
+    if (!g) return;
+    pt.ctx.save();
+    pt.ctx.globalCompositeOperation = "destination-out";
+    pt.ctx.fillStyle = "#000";
+    pt.shape(pt.ctx, g);
+    pt.ctx.restore();
+  });
+}
+
+painters.forEach(pt => {
+  let drawing = false, last = null;
+  const toXY = e => {
+    const r = pt.svg.getBoundingClientRect();
+    return [(e.clientX - r.left) / r.width * pt.cv.width,
+            (e.clientY - r.top) / r.height * pt.cv.height];
+  };
+  const stroke = (x, y) => {
+    pt.ctx.globalCompositeOperation = paintMode === "erase" ? "destination-out" : "source-over";
+    pt.ctx.strokeStyle = pt.ctx.fillStyle = "rgba(192,45,20,0.85)";
+    pt.ctx.lineWidth = BRUSH * 2 * PSCALE;
+    pt.ctx.lineCap = pt.ctx.lineJoin = "round";
+    if (last) { pt.ctx.beginPath(); pt.ctx.moveTo(last[0], last[1]); pt.ctx.lineTo(x, y); pt.ctx.stroke(); }
+    else { pt.ctx.beginPath(); pt.ctx.arc(x, y, BRUSH * PSCALE, 0, 2 * Math.PI); pt.ctx.fill(); }
+    last = [x, y];
+  };
+  pt.cv.addEventListener("pointerdown", e => {
+    if (paintMode === "tap") return;
+    drawing = true; last = null;
+    try { pt.cv.setPointerCapture(e.pointerId); } catch (_) {}
+    const [x, y] = toXY(e); stroke(x, y); e.preventDefault();
+  });
+  pt.cv.addEventListener("pointermove", e => {
+    if (!drawing) return;
+    const [x, y] = toXY(e); stroke(x, y); e.preventDefault();
+  });
+  ["pointerup", "pointercancel"].forEach(ev => pt.cv.addEventListener(ev, () => {
+    if (!drawing) return;
+    drawing = false; last = null;
+    recountPainter(pt);
+  }));
+});
+
+function setMode(m) {
+  paintMode = m;
+  document.getElementById("modeTap").classList.toggle("active", m === "tap");
+  document.getElementById("modeDraw").classList.toggle("active", m === "draw");
+  document.getElementById("modeErase").classList.toggle("active", m === "erase");
+  painters.forEach(pt => pt.cv.style.pointerEvents = m === "tap" ? "none" : "auto");
+  document.getElementById("mapHint").textContent =
+    m === "tap"  ? "Each tap cycles the burned fraction of that region: 0 → ¼ → ½ → ¾ → full → 0" :
+    m === "draw" ? "Drag over the burned area — the app measures exactly how much of each region you cover (updates when you lift your finger)." :
+                   "Drag to erase drawn burn area; fractions update when you lift your finger.";
+}
+document.getElementById("modeTap").addEventListener("click", () => setMode("tap"));
+document.getElementById("modeDraw").addEventListener("click", () => setMode("draw"));
+document.getElementById("modeErase").addEventListener("click", () => setMode("erase"));
+
+["ageY", "ageM", "weight", "burnTime", "givenMl"].forEach(id =>
+  document.getElementById(id).addEventListener("input", update));
+document.getElementById("maintToggle").addEventListener("change", update);
+document.getElementById("formulaConst").addEventListener("change", update);
+document.getElementById("resetBtn").addEventListener("click", () => {
+  REGIONS.forEach(r => state[r.id] = 0);
+  painters.forEach(pt => pt.ctx.clearRect(0, 0, pt.cv.width, pt.cv.height));
+  update();
+});
+
+/* ══════════════════════ 6. CLINICAL PHOTO ATTACHMENT ══════════════════════
+   Image-acquisition module: photo stays on-device (never uploaded). It will
+   feed the AI segmentation stage; for now it documents the burn beside the
+   assessment and appears on the printed summary. */
+document.querySelectorAll(".samplebar button").forEach(btn =>
+  btn.addEventListener("click", () => {
+    document.getElementById("photoWrap").innerHTML =
+      `<img src="${btn.dataset.img}" alt="Sample clinical burn photograph"
+            onerror="this.parentElement.innerHTML='<div class=&quot;photonote&quot;>Sample images are not included in the public version (copyright); use the camera to attach your own photo.</div>'">
+       <div class="photonote">Sample clinical image (published source) loaded for testing — input for the AI segmentation module (in development).</div>`;
+  }));
+
+document.getElementById("photoIn").addEventListener("change", e => {
+  const file = e.target.files[0];
+  const wrap = document.getElementById("photoWrap");
+  if (!file) { wrap.innerHTML = ""; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    wrap.innerHTML = `<img src="${reader.result}" alt="Clinical burn photograph">
+      <div class="photonote">Stored on this device only — input for the AI segmentation module (in development).</div>`;
+  };
+  reader.readAsDataURL(file);
+});
+
+/* ══════════════════════ 7. SELF-TEST — proof of correctness ══════════════════════
+   Recomputes known hand-calculated values and shows PASS/FAIL for each. */
+function runSelfTest() {
+  const t = [];
+  const close = (a, b) => Math.abs(a - b) < 0.01;
+
+  // 1. Chart column totals (whole body marked): rounded chart sums
+  const expectSum = { 0: 100, 1: 102, 5: 102, 10: 104 };
+  AGE_COLS.forEach(band => {
+    const sum = REGIONS.reduce((s, r) => s + r.pct(band), 0);
+    t.push([`Chart column ${band} y — all regions sum`, `${sum}%`, close(sum, expectSum[band])]);
+  });
+
+  // 2. Age-band mapping
+  [[0.5, 0], [3, 1], [7, 5], [12, 10]].forEach(([age, band]) =>
+    t.push([`Age ${age} y → column ${band}`, ageBand(age) === band ? "correct" : `got ${ageBand(age)}`, ageBand(age) === band]));
+
+  // 3. Worked example: 2 y, full front trunk + ½ both front thighs = 16%
+  const ex = 13 * 1 + THIGH[1] * 0.5 * 2;
+  t.push(["Example TBSA (front trunk full + ½ both thighs, 2 y)", `${ex}%`, close(ex, 16)]);
+
+  // 4. Modified Parkland: 3 × 12 kg × 16% = 576 mL, halves 288 mL
+  const total = 3 * 12 * 16;
+  t.push(["3 mL × 12 kg × 16% = 576 mL/24 h", `${total} mL`, close(total, 576)]);
+  t.push(["First-8-h half = 288 mL", `${total / 2} mL`, close(total / 2, 288)]);
+
+  // 5. Maintenance 4-2-1: 8 kg → 32, 12 kg → 44, 15 kg → 50, 25 kg → 65 mL/h
+  [[8, 32], [12, 44], [15, 50], [25, 65]].forEach(([kg, exp]) =>
+    t.push([`Maintenance ${kg} kg → ${exp} mL/h`, `${maintenanceRate(kg)} mL/h`, close(maintenanceRate(kg), exp)]));
+
+  // 6. Delayed presentation: 2 h elapsed → first half over remaining 6 h = 48 mL/h
+  const rate = (total / 2) / (8 - 2);
+  t.push(["Delayed 2 h → 288 mL over 6 h = 48 mL/h", `${rate.toFixed(0)} mL/h`, close(rate, 48)]);
+
+  const allPass = t.every(x => x[2]);
+  document.getElementById("testOut").innerHTML =
+    `<div class="testbanner ${allPass ? "ok" : "bad"}">${allPass ? "✓ ALL " + t.length + " CHECKS PASSED — calculations verified" : "✗ SOME CHECKS FAILED — do not use"}</div>` +
+    `<table>` + t.map(([name, val, ok]) =>
+      `<tr><td>${name}</td><td>${val}</td><td class="${ok ? "pass" : "fail"}">${ok ? "PASS" : "FAIL"}</td></tr>`).join("") + `</table>`;
+}
+document.getElementById("testBtn").addEventListener("click", runSelfTest);
+
+// Default burn time: one hour ago, so the demo shows a live rate immediately
+(() => {
+  const d = new Date(Date.now() - 3600e3);
+  d.setSeconds(0, 0);
+  const pad = n => String(n).padStart(2, "0");
+  document.getElementById("burnTime").value =
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+})();
+
+/* Demo presets via URL hash (#demo=ex1 …) — reproducible states for
+   documentation, training, and screenshots. */
+const DEMOS = {
+  ex1:      { ageY: 2, ageM: 0, weight: 12, hoursAgo: 1,  given: 0,   marks: { trunk_f: 1, th_r_f: 0.5, th_l_f: 0.5 } },
+  ex2:      { ageY: 7, ageM: 0, weight: 24, hoursAgo: 1,  given: 0,   marks: { trunk_f: 1, th_r_f: 0.5, th_l_f: 0.5 } },
+  ex3:      { ageY: 0, ageM: 9, weight: 8,  hoursAgo: 2,  given: 0,   marks: { trunk_f: 0.75 }, photo: "sample_images/sample_1_infant_trunk_scald.jpg" },
+  ex4:      { ageY: 3, ageM: 0, weight: 14, hoursAgo: 10, given: 200, marks: { trunk_f: 1, trunk_b: 0.5, th_r_f: 0.5, th_l_f: 0.5 } },
+  selftest: { ageY: 2, ageM: 0, weight: 12, hoursAgo: 1,  given: 0,   marks: {}, selftest: true },
+};
+(function () {
+  const m = location.hash.match(/#demo=(\w+)/);
+  if (!m || !DEMOS[m[1]]) return;
+  const d = DEMOS[m[1]];
+  document.getElementById("ageY").value = d.ageY;
+  document.getElementById("ageM").value = d.ageM;
+  document.getElementById("weight").value = d.weight;
+  document.getElementById("givenMl").value = d.given;
+  const t = new Date(Date.now() - d.hoursAgo * 3600e3);
+  t.setSeconds(0, 0);
+  const pad = n => String(n).padStart(2, "0");
+  document.getElementById("burnTime").value =
+    `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}`;
+  Object.entries(d.marks).forEach(([id, f]) => state[id] = f);
+  if (d.photo) document.getElementById("photoWrap").innerHTML =
+    `<img src="${d.photo}" alt="Sample clinical burn photograph">
+     <div class="photonote">Sample clinical image (published source) loaded for testing.</div>`;
+  if (d.selftest) runSelfTest();
+})();
+
+setInterval(update, 60000);   // keep the "rate now" current as time passes
+update();
+</script>
+</body>
+</html>

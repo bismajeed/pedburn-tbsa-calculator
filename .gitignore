@@ -1,0 +1,10 @@
+# Copyrighted clinical sample images — local testing only, never published
+sample_images/
+
+# Documentation with embedded sample imagery — kept local
+docs/
+PedBurn_User_Guide.pdf
+
+# Local tooling
+.claude/
+.DS_Store
