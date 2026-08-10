@@ -1,5 +1,7 @@
 # PedBurn — Pediatric Burn TBSA & Fluid Resuscitation Calculator
 
+### ▶ Live application: **https://pediatricsburncalculator.netlify.app/**
+
 > **Research prototype — not a medical device.** All outputs must be verified by the treating clinician. Not for clinical use.
 
 An age-aware, single-file web application that measures the percentage of Total Body Surface Area (TBSA) burned in a child and converts it into a complete fluid resuscitation plan — deterministically, reproducibly, and in under a minute at the bedside.
@@ -72,7 +74,11 @@ The long-term vision: any emergency clinician — including in centres without b
 
 ## 6 · Using the app
 
-Open **`index.html`** in any modern browser — no installation, build step, or internet required. Works on phones and tablets; the camera button attaches a clinical photo (stored on-device only).
+**Live:** open **https://pediatricsburncalculator.netlify.app/** on any phone, tablet, or computer — nothing to install. On a phone it can be added to the home screen and used like a native app.
+
+**Offline:** open **`index.html`** from a local copy. The entire application is one self-contained HTML file — **no build step, no dependencies, no server, no API keys, and no network calls of any kind.** All calculation and the draw-mode planimetry run locally in the browser, so patient data never leaves the device. The camera button attaches a clinical photo that is likewise stored on-device only.
+
+> The Phase-3 AI segmentation model will also be designed to run on-device (or on a hospital-controlled inference server) rather than a third-party API, keeping patient images inside the institution.
 
 Reproducible demo states for training and documentation: append `#demo=ex1` … `#demo=ex4` (worked examples), `#demo=ex5` (draw-mode planimetry), or `#demo=selftest` to the URL.
 
