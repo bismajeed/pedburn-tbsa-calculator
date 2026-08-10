@@ -82,6 +82,13 @@
   .figure { text-align: center; }
   .figure svg { width: 100%; max-width: 250px; height: auto; touch-action: manipulation; display: block; }
   .figwrap { position: relative; display: inline-block; }
+  .figwrap.grid::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(to right, rgba(15,118,110,0.18) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(15,118,110,0.18) 1px, transparent 1px);
+    background-size: 4.545% 2.78%;   /* 10×10 viewBox-unit squares on the 220×360 figure */
+  }
   .figwrap canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
   .modebar { display: flex; gap: 6px; justify-content: center; margin-bottom: 10px; }
   .modebtn { flex: none; padding: 7px 14px; font-size: 0.8rem; border-radius: 999px; }
@@ -175,6 +182,8 @@
     </div>
     <label>Weight (kg)</label>
     <input type="number" id="weight" min="1" max="120" step="0.1" placeholder="e.g. 12.5">
+    <label>Height / length (cm) — enables absolute BSA &amp; Galveston</label>
+    <input type="number" id="heightCm" min="30" max="200" step="0.5" placeholder="e.g. 88">
     <label>Date &amp; time of burn injury</label>
     <input type="datetime-local" id="burnTime">
     <label>Fluids already given since injury (mL)</label>
@@ -183,6 +192,7 @@
     <select id="formulaConst">
       <option value="3" selected>Pediatric modified Parkland — 3 mL/kg/%TBSA</option>
       <option value="4">Classic Parkland — 4 mL/kg/%TBSA</option>
+      <option value="galveston">Galveston — 5000 mL/m² burned + 2000 mL/m² BSA</option>
     </select>
     <div class="checkline">
       <input type="checkbox" id="maintToggle" checked>
@@ -214,6 +224,7 @@
       <button type="button" id="modeTap" class="modebtn active">Tap regions</button>
       <button type="button" id="modeDraw" class="modebtn">✏️ Draw exact area</button>
       <button type="button" id="modeErase" class="modebtn">Eraser</button>
+      <button type="button" id="gridToggle" class="modebtn">⊞ Grid</button>
     </div>
     <div class="figures">
       <div class="figure"><div class="cap">FRONT</div><div class="figwrap"><svg id="svgFront" viewBox="0 0 220 360" xmlns="http://www.w3.org/2000/svg"></svg><canvas id="cvFront" width="660" height="1080"></canvas></div></div>
@@ -432,26 +443,50 @@ function maintenanceRate(kg) {           // Holliday–Segar 4-2-1 (mL/h)
   return 60 + 1 * (kg - 20);
 }
 
+/* Absolute body surface area from height & weight */
+function bsaMosteller(h, kg) { return h > 0 && kg > 0 ? Math.sqrt(h * kg / 3600) : 0; }
+function bsaHaycock(h, kg)   { return h > 0 && kg > 0 ? 0.024265 * Math.pow(h, 0.3964) * Math.pow(kg, 0.5378) : 0; }
+
 const fmt = n => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 
-function fluidPlanHTML(tbsa, kg, burnTimeStr, givenMl, withMaint, mlPerKg) {
+function fluidPlanHTML(tbsa, kg, heightCm, burnTimeStr, givenMl, withMaint, formulaVal) {
   if (tbsa <= 0) return `<div class="placeholder">Mark burned regions on the body map to generate the fluid plan.<br><br>Count only partial-thickness (2nd-degree) and full-thickness burns — superficial (1st-degree) erythema is excluded from TBSA.</div>`;
   if (!kg)      return `<div class="placeholder">Enter the patient's weight to generate the fluid plan.</div>`;
 
-  const total24 = mlPerKg * kg * tbsa;
-  const half = total24 / 2;
+  const bsa = bsaMosteller(heightCm, kg);
+  const burnedM2 = bsa * tbsa / 100;
   let html = "";
+
+  if (bsa > 0) {
+    html += `<div class="fluid-line"><span>Total body surface area — Mosteller (Haycock ${bsaHaycock(heightCm, kg).toFixed(2)})</span><b>${bsa.toFixed(2)} m²</b></div>`;
+    html += `<div class="fluid-line"><span>Burned area, absolute (${tbsa.toFixed(1)}% of BSA)</span><b>${burnedM2.toFixed(3)} m² = ${fmt(burnedM2 * 10000)} cm²</b></div>`;
+  }
+
+  let total24, formulaLabel, maint;
+  if (formulaVal === "galveston") {
+    if (!bsa) return html + `<div class="warn">The Galveston formula needs the patient's height to compute absolute surface area — enter height above.</div>`;
+    total24 = 5000 * burnedM2 + 2000 * bsa;
+    formulaLabel = `Galveston: 5000 × ${burnedM2.toFixed(3)} m² burned + 2000 × ${bsa.toFixed(2)} m² BSA`;
+    maint = 0;   // Galveston's 2000 mL/m² term already covers maintenance
+  } else {
+    const mlPerKg = parseFloat(formulaVal);
+    total24 = mlPerKg * kg * tbsa;
+    formulaLabel = `${mlPerKg} mL × ${kg} kg × ${tbsa.toFixed(1)}%`;
+    maint = withMaint ? maintenanceRate(kg) : 0;
+  }
+  const half = total24 / 2;
 
   if (tbsa < 10) {
     html += `<div class="warn">TBSA &le; 10% — formal IV resuscitation is generally indicated in children only for partial/full-thickness burns &gt;10% TBSA. Below that, oral + maintenance fluids usually suffice; formula shown for reference.</div>`;
   }
 
-  html += `<div class="fluid-line"><span>Resuscitation total, first 24 h (${mlPerKg} mL × ${kg} kg × ${tbsa.toFixed(1)}%)</span><b>${fmt(total24)} mL</b></div>`;
+  html += `<div class="fluid-line"><span>Resuscitation total, first 24 h (${formulaLabel})</span><b>${fmt(total24)} mL</b></div>`;
   html += `<div class="fluid-line"><span>First 8 h from injury (½)</span><b>${fmt(half)} mL</b></div>`;
   html += `<div class="fluid-line"><span>Next 16 h (½)</span><b>${fmt(half)} mL (${fmt(half / 16)} mL/h)</b></div>`;
 
-  const maint = withMaint ? maintenanceRate(kg) : 0;
-  if (withMaint) {
+  if (formulaVal === "galveston") {
+    html += `<div class="fluid-line"><span>Maintenance</span><b>included in the 2000 mL/m² term</b></div>`;
+  } else if (withMaint) {
     html += `<div class="fluid-line"><span>Maintenance (4-2-1 rule)</span><b>${fmt(maint)} mL/h</b></div>`;
   }
 
@@ -511,11 +546,12 @@ function update() {
   }
 
   const kg = parseFloat(document.getElementById("weight").value) || 0;
+  const heightCm = parseFloat(document.getElementById("heightCm").value) || 0;
   const given = parseFloat(document.getElementById("givenMl").value) || 0;
   const withMaint = document.getElementById("maintToggle").checked;
-  const mlPerKg = parseFloat(document.getElementById("formulaConst").value);
+  const formulaVal = document.getElementById("formulaConst").value;
   document.getElementById("fluidOut").innerHTML =
-    fluidPlanHTML(tbsa, kg, document.getElementById("burnTime").value, given, withMaint, mlPerKg);
+    fluidPlanHTML(tbsa, kg, heightCm, document.getElementById("burnTime").value, given, withMaint, formulaVal);
 }
 
 buildFigure(document.getElementById("svgFront"), GEOM_FRONT);
@@ -625,8 +661,12 @@ function setMode(m) {
 document.getElementById("modeTap").addEventListener("click", () => setMode("tap"));
 document.getElementById("modeDraw").addEventListener("click", () => setMode("draw"));
 document.getElementById("modeErase").addEventListener("click", () => setMode("erase"));
+document.getElementById("gridToggle").addEventListener("click", () => {
+  const on = document.getElementById("gridToggle").classList.toggle("active");
+  document.querySelectorAll(".figwrap").forEach(w => w.classList.toggle("grid", on));
+});
 
-["ageY", "ageM", "weight", "burnTime", "givenMl"].forEach(id =>
+["ageY", "ageM", "weight", "heightCm", "burnTime", "givenMl"].forEach(id =>
   document.getElementById(id).addEventListener("input", update));
 document.getElementById("maintToggle").addEventListener("change", update);
 document.getElementById("formulaConst").addEventListener("change", update);
@@ -694,6 +734,14 @@ function runSelfTest() {
   const rate = (total / 2) / (8 - 2);
   t.push(["Delayed 2 h → 288 mL over 6 h = 48 mL/h", `${rate.toFixed(0)} mL/h`, close(rate, 48)]);
 
+  // 7. Absolute BSA and Galveston (88 cm, 12 kg, 16% TBSA)
+  const bsa = bsaMosteller(88, 12);
+  t.push(["BSA Mosteller √(88×12/3600) ≈ 0.542 m²", `${bsa.toFixed(3)} m²`, Math.abs(bsa - 0.542) < 0.001]);
+  const burned = bsa * 0.16;
+  t.push(["Burned area 16% of BSA ≈ 0.087 m²", `${burned.toFixed(4)} m²`, Math.abs(burned - 0.0867) < 0.001]);
+  const galv = 5000 * burned + 2000 * bsa;
+  t.push(["Galveston 5000×burned + 2000×BSA ≈ 1516 mL", `${galv.toFixed(0)} mL`, Math.abs(galv - 1516.5) < 2]);
+
   const allPass = t.every(x => x[2]);
   document.getElementById("testOut").innerHTML =
     `<div class="testbanner ${allPass ? "ok" : "bad"}">${allPass ? "✓ ALL " + t.length + " CHECKS PASSED — calculations verified" : "✗ SOME CHECKS FAILED — do not use"}</div>` +
@@ -714,11 +762,12 @@ document.getElementById("testBtn").addEventListener("click", runSelfTest);
 /* Demo presets via URL hash (#demo=ex1 …) — reproducible states for
    documentation, training, and screenshots. */
 const DEMOS = {
-  ex1:      { ageY: 2, ageM: 0, weight: 12, hoursAgo: 1,  given: 0,   marks: { trunk_f: 1, th_r_f: 0.5, th_l_f: 0.5 } },
-  ex2:      { ageY: 7, ageM: 0, weight: 24, hoursAgo: 1,  given: 0,   marks: { trunk_f: 1, th_r_f: 0.5, th_l_f: 0.5 } },
-  ex3:      { ageY: 0, ageM: 9, weight: 8,  hoursAgo: 2,  given: 0,   marks: { trunk_f: 0.75 }, photo: "sample_images/sample_1_infant_trunk_scald.jpg" },
-  ex4:      { ageY: 3, ageM: 0, weight: 14, hoursAgo: 10, given: 200, marks: { trunk_f: 1, trunk_b: 0.5, th_r_f: 0.5, th_l_f: 0.5 } },
-  selftest: { ageY: 2, ageM: 0, weight: 12, hoursAgo: 1,  given: 0,   marks: {}, selftest: true },
+  ex1:      { ageY: 2, ageM: 0, weight: 12, height: 88,  hoursAgo: 1,  given: 0,   marks: { trunk_f: 1, th_r_f: 0.5, th_l_f: 0.5 } },
+  ex2:      { ageY: 7, ageM: 0, weight: 24, height: 122, hoursAgo: 1,  given: 0,   marks: { trunk_f: 1, th_r_f: 0.5, th_l_f: 0.5 } },
+  ex3:      { ageY: 0, ageM: 9, weight: 8,  height: 71,  hoursAgo: 2,  given: 0,   marks: { trunk_f: 0.75 }, photo: "sample_images/sample_1_infant_trunk_scald.jpg" },
+  ex4:      { ageY: 3, ageM: 0, weight: 14, height: 95,  hoursAgo: 10, given: 200, marks: { trunk_f: 1, trunk_b: 0.5, th_r_f: 0.5, th_l_f: 0.5 } },
+  ex5:      { ageY: 2, ageM: 0, weight: 12, height: 88,  hoursAgo: 1,  given: 0,   marks: {}, paintTrunk: true },
+  selftest: { ageY: 2, ageM: 0, weight: 12, height: 88,  hoursAgo: 1,  given: 0,   marks: {}, selftest: true },
 };
 (function () {
   const m = location.hash.match(/#demo=(\w+)/);
@@ -727,6 +776,7 @@ const DEMOS = {
   document.getElementById("ageY").value = d.ageY;
   document.getElementById("ageM").value = d.ageM;
   document.getElementById("weight").value = d.weight;
+  if (d.height) document.getElementById("heightCm").value = d.height;
   document.getElementById("givenMl").value = d.given;
   const t = new Date(Date.now() - d.hoursAgo * 3600e3);
   t.setSeconds(0, 0);
@@ -737,6 +787,15 @@ const DEMOS = {
   if (d.photo) document.getElementById("photoWrap").innerHTML =
     `<img src="${d.photo}" alt="Sample clinical burn photograph">
      <div class="photonote">Sample clinical image (published source) loaded for testing.</div>`;
+  if (d.paintTrunk) {           // irregular drawn patch + grid, for draw-mode demos
+    setMode("draw");
+    document.getElementById("gridToggle").click();
+    const pt = painters[0], c = pt.ctx;
+    c.fillStyle = "rgba(192,45,20,0.85)";
+    [[118, 150, 14], [128, 158, 16], [136, 168, 13], [122, 166, 12], [130, 176, 11], [112, 158, 9]]
+      .forEach(([x, y, r]) => { c.beginPath(); c.arc(x * PSCALE, y * PSCALE, r * PSCALE, 0, 2 * Math.PI); c.fill(); });
+    recountPainter(pt);
+  }
   if (d.selftest) runSelfTest();
 })();
 
