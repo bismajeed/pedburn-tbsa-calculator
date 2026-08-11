@@ -26,7 +26,7 @@ PedBurn replaces visual guesswork with measurement at three levels of precision,
 
 | Level | How the burned area is captured | Precision |
 |---|---|---|
-| **Tap** | Tap a body region to cycle its burned fraction (¼ → ½ → ¾ → full) | Coarse, fastest |
+| **Tap** | Tap a region to mark the whole region burned — binary, no grading | Coarse, fastest |
 | **Draw** *(planimetry)* | Trace the actual irregular patch with a finger; the app counts covered pixels — thousands of tiny squares — against each region's true area | High, no rounding |
 | **AI** *(in development)* | A segmentation network reads a clinical photograph, separates normal skin from burned skin, and pre-fills the same body map for the clinician to confirm | Highest, automatic |
 
@@ -34,13 +34,15 @@ The **Draw mode implements classical planimetry**: to measure an irregular area,
 
 ![Draw mode with grid — irregular patch measured by square counting](docs/screenshots/ex5_draw.png)
 
-*Above: an irregular patch traced on the trunk covers 22% of that region → 2.86% TBSA — impossible to express in quarter-steps. With height entered, the app also reports the child's absolute body surface area (Mosteller/Haycock) and the burned area in cm².*
+*Above: an irregular patch traced on the trunk covers 22% of that region → 2.86% TBSA — where marking whole regions would have forced a 13% trunk. Only the drawn skin is coloured; the region behind it is not tinted. With height entered, the app also reports the child's absolute body surface area (Mosteller/Haycock) and the burned area in cm².*
+
+**Binary by design.** Skin is marked as either burned or not burned — one burn colour, no graded shading. A lighter tint would be read as a more superficial burn, and this map does not represent depth: the clinician judges depth and marks only partial-thickness (2nd-degree) and deeper. Partial involvement of a region is expressed by the *shape of the drawn area*, never by colour intensity.
 
 ## 3 · The approach
 
 **Age-adjusted anatomy.** Every region of the front/back child figure carries a surface-area weight from a pediatric Lund–Browder chart with four age columns (<1, 1–4, 5–9, ≥10 years). Entering the age automatically selects the column — the same burn marks re-weight as the patient ages, with no mental arithmetic:
 
-![Worked example — 2-year-old, 16% TBSA](docs/screenshots/ex1.png)
+![Worked example — 2-year-old, 19% TBSA](docs/screenshots/ex1.png)
 
 **Verified fluid engine.** TBSA feeds three selectable resuscitation formulas, always with pediatric safety rails:
 
@@ -49,14 +51,14 @@ The **Draw mode implements classical planimetry**: to measure an irregular area,
 - **Galveston (BSA-based):** 5000 mL/m² burned + 2000 mL/m² total BSA, using height + weight (Mosteller formula)
 - Safety rails: >10% TBSA threshold for formal IV resuscitation, urine-output titration target ≈1 mL/kg/h, partial/full-thickness-only reminder, delayed-presentation catch-up logic that credits fluids already given and flags pacing as a clinician decision
 
-**Trust through self-verification.** One button re-derives **19 hand-calculated values** inside the running app — chart column sums, age-band mapping, worked-example arithmetic, maintenance rates, BSA and Galveston math — and displays PASS/FAIL for each. Any failure turns the banner red with "do not use":
+**Trust through self-verification.** One button re-derives **20 hand-calculated values** inside the running app — chart column sums, age-band mapping, worked-example arithmetic, maintenance rates, BSA and Galveston math — and displays PASS/FAIL for each. Any failure turns the banner red with "do not use":
 
-![Built-in self-test — 19 checks](docs/screenshots/selftest.png)
+![Built-in self-test — 20 checks](docs/screenshots/selftest.png)
 
 ## 4 · Impact and expected numbers
 
 - **Reproducibility:** identical inputs always produce identical TBSA and fluid plans — inter-rater variability at the calculation stage is eliminated by construction.
-- **Error arithmetic:** in a 12 kg toddler, every 1% of TBSA mis-estimation changes the 24-hour prescription by 36 mL; a 2× overestimate (routinely reported at referral) would double a 576 mL prescription to 1,152 mL. Measuring instead of guessing removes exactly this class of error.
+- **Error arithmetic:** in a 12 kg toddler, every 1% of TBSA mis-estimation changes the 24-hour prescription by 36 mL; a 2× overestimate (routinely reported at referral) would double a 684 mL prescription to 1,368 mL. Measuring instead of guessing removes exactly this class of error.
 - **Speed:** a complete assessment — patient data, burn marking, fluid plan, printed summary — takes under a minute on a phone.
 - **Validation targets (planned study):** absolute TBSA error < 5 percentage points versus expert-panel consensus; segmentation Dice coefficient > 0.85 for the Phase-3 AI; time-to-fluid-prescription reduced versus standard charting.
 

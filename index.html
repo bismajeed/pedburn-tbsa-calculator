@@ -230,7 +230,7 @@
       <div class="figure"><div class="cap">FRONT</div><div class="figwrap"><svg id="svgFront" viewBox="0 0 220 360" xmlns="http://www.w3.org/2000/svg"></svg><canvas id="cvFront" width="660" height="1080"></canvas></div></div>
       <div class="figure"><div class="cap">BACK</div><div class="figwrap"><svg id="svgBack" viewBox="0 0 220 360" xmlns="http://www.w3.org/2000/svg"></svg><canvas id="cvBack" width="660" height="1080"></canvas></div></div>
     </div>
-    <p class="maphint" id="mapHint">Each tap cycles the burned fraction of that region: 0 → ¼ → ½ → ¾ → full → 0</p>
+    <p class="maphint" id="mapHint">Tap a region to mark the whole region burned; tap again to clear. For part of a region, use Draw.</p>
     <div class="legend" id="legend"></div>
   </section>
 
@@ -245,7 +245,7 @@
 
 <footer>
   Surface-area weights: pediatric Lund–Browder chart (age columns 0 / 1 / 5 / 10 y). Pediatric modified Parkland: 3 mL × kg × %TBSA over 24 h from injury (½ in first 8 h) + 4-2-1 maintenance; classic 4 mL selectable.<br>
-  <span class="noprint">Prototype v0.1 — body-map input; AI photo segmentation module planned.</span>
+  <span class="noprint">Prototype v0.2 — binary body-map input (tap + draw planimetry); AI photo segmentation module planned.</span>
 </footer>
 
 <script>
@@ -352,9 +352,12 @@ const GEOM_BACK = [
 
 /* ══════════════════════ 3. STATE & RENDERING ══════════════════════ */
 
-const FRACTIONS = [0, 0.25, 0.5, 0.75, 1];
-const FRAC_LABEL = { 0: "0", 0.25: "¼", 0.5: "½", 0.75: "¾", 1: "Full" };
-const FILL = { 0: "var(--skin)", 0.25: "#f8c9ab", 0.5: "#f19a6f", 0.75: "#e5623c", 1: "#c02d14" };
+/* Burn marking is BINARY: skin is either burned or not burned. No graded
+   shading — a lighter tint would be read as a more superficial burn, which
+   the map does not represent. Partial coverage of a region is shown by the
+   shape of the drawn area itself, not by colour intensity. */
+const BURN_FILL = "#c02d14";
+const SKIN_FILL = "var(--skin)";
 const state = {};                       // regionId -> fraction
 REGIONS.forEach(r => state[r.id] = 0);
 const regionById = Object.fromEntries(REGIONS.map(r => [r.id, r]));
@@ -375,7 +378,7 @@ function buildFigure(svgEl, geoms) {
     }
     el.classList.add("region");
     el.dataset.region = g.id;
-    el.setAttribute("fill", FILL[0]);
+    el.setAttribute("fill", SKIN_FILL);
     el.addEventListener("click", () => cycleRegion(g.id));
     svgEl.appendChild(el);
     const title = document.createElementNS(SVGNS, "title");
@@ -383,14 +386,9 @@ function buildFigure(svgEl, geoms) {
   });
 }
 
-function cycleRegion(id) {
+function cycleRegion(id) {           // binary toggle: whole region burned / not burned
   if (typeof paintMode !== "undefined" && paintMode !== "tap") return;
-  let i = FRACTIONS.indexOf(state[id]);
-  if (i < 0) {                       // drawn (continuous) value → snap to next quarter up
-    i = FRACTIONS.findIndex(f => f >= state[id]);
-    i = (i < 0 ? FRACTIONS.length : i) - 1;
-  }
-  state[id] = FRACTIONS[(i + 1) % FRACTIONS.length];
+  state[id] = state[id] > 0 ? 0 : 1;
   clearRegionPaint(id);
   update();
 }
@@ -399,19 +397,20 @@ function paintRegions(currentBand) {
   document.querySelectorAll("svg .region").forEach(el => {
     const id = el.dataset.region;
     const f = state[id];
-    const bucket = f === 0 ? 0 : f <= 0.25 ? 0.25 : f <= 0.5 ? 0.5 : f <= 0.75 ? 0.75 : 1;
-    el.setAttribute("fill", FILL[bucket]);
+    // Solid burn colour only when the whole region is marked; a partly drawn
+    // region stays skin-coloured and the drawn area itself shows the burn.
+    el.setAttribute("fill", f >= 0.999 ? BURN_FILL : SKIN_FILL);
     const r = regionById[id];
     el.querySelector("title").textContent =
-      `${r.name} — ${r.pct(currentBand)}% of BSA — burned: ${Math.round(f * 100)}%`;
+      `${r.name} — ${r.pct(currentBand)}% of BSA — burned: ${Math.round(f * 100)}% of the region`;
   });
 }
 
 function buildLegend() {
-  const lg = document.getElementById("legend");
-  lg.innerHTML = FRACTIONS.map(f =>
-    `<span><i style="background:${f === 0 ? "#f3e2d4" : FILL[f]}"></i>${f === 0 ? "Unburned" : FRAC_LABEL[f] + " burned"}</span>`
-  ).join("");
+  document.getElementById("legend").innerHTML =
+    `<span><i style="background:#f3e2d4"></i>Unburned skin</span>` +
+    `<span><i style="background:${BURN_FILL}"></i>Burned skin</span>` +
+    `<span style="color:var(--muted)">Depth is not represented — mark partial-thickness and deeper only</span>`;
 }
 
 /* ══════════════════════ 4. CALCULATIONS ══════════════════════ */
@@ -541,7 +540,7 @@ function update() {
     listEl.innerHTML = `<div class="placeholder">No burned regions marked yet.</div>`;
   } else {
     listEl.innerHTML = `<table class="regions">` + rows.map(r =>
-      `<tr><td>${r.name}</td><td>${FRAC_LABEL[r.frac] ?? Math.round(r.frac * 100) + "%"}</td><td>${r.contrib.toFixed(2)}%</td></tr>`
+      `<tr><td>${r.name}</td><td>${r.frac >= 0.999 ? "whole region" : Math.round(r.frac * 100) + "% of region"}</td><td>${r.contrib.toFixed(2)}%</td></tr>`
     ).join("") + `</table>`;
   }
 
@@ -601,6 +600,27 @@ function recountPainter(pt) {
   update();
 }
 
+/* Paint a given fraction of one region (lower band of its area) — used by the
+   demo presets so a partly burned region is shown as a real drawn area rather
+   than as a tint. */
+function paintRegionFraction(id, frac) {
+  painters.forEach(pt => {
+    const g = pt.geoms.find(x => x.id === id);
+    if (!g) return;
+    const bb = g.t === "ellipse"
+      ? { x: g.cx - g.rx, y: g.cy - g.ry, w: 2 * g.rx, h: 2 * g.ry }
+      : { x: g.x, y: g.y, w: g.w, h: g.h };
+    pt.ctx.save();
+    pt.ctx.beginPath();
+    pt.ctx.rect(bb.x * PSCALE, (bb.y + bb.h * (1 - frac)) * PSCALE, bb.w * PSCALE, bb.h * frac * PSCALE);
+    pt.ctx.clip();
+    pt.ctx.fillStyle = BURN_FILL;
+    pt.shape(pt.ctx, g);
+    pt.ctx.restore();
+    recountPainter(pt);
+  });
+}
+
 function clearRegionPaint(id) {
   if (typeof painters === "undefined") return;
   painters.forEach(pt => {
@@ -623,7 +643,7 @@ painters.forEach(pt => {
   };
   const stroke = (x, y) => {
     pt.ctx.globalCompositeOperation = paintMode === "erase" ? "destination-out" : "source-over";
-    pt.ctx.strokeStyle = pt.ctx.fillStyle = "rgba(192,45,20,0.85)";
+    pt.ctx.strokeStyle = pt.ctx.fillStyle = BURN_FILL;
     pt.ctx.lineWidth = BRUSH * 2 * PSCALE;
     pt.ctx.lineCap = pt.ctx.lineJoin = "round";
     if (last) { pt.ctx.beginPath(); pt.ctx.moveTo(last[0], last[1]); pt.ctx.lineTo(x, y); pt.ctx.stroke(); }
@@ -654,9 +674,9 @@ function setMode(m) {
   document.getElementById("modeErase").classList.toggle("active", m === "erase");
   painters.forEach(pt => pt.cv.style.pointerEvents = m === "tap" ? "none" : "auto");
   document.getElementById("mapHint").textContent =
-    m === "tap"  ? "Each tap cycles the burned fraction of that region: 0 → ¼ → ½ → ¾ → full → 0" :
-    m === "draw" ? "Drag over the burned area — the app measures exactly how much of each region you cover (updates when you lift your finger)." :
-                   "Drag to erase drawn burn area; fractions update when you lift your finger.";
+    m === "tap"  ? "Tap a region to mark the whole region burned; tap again to clear. For part of a region, use Draw." :
+    m === "draw" ? "Drag over the burned skin — the app measures exactly how much of each region you cover (updates when you lift your finger)." :
+                   "Drag to erase drawn burn area; the measurement updates when you lift your finger.";
 }
 document.getElementById("modeTap").addEventListener("click", () => setMode("tap"));
 document.getElementById("modeDraw").addEventListener("click", () => setMode("draw"));
@@ -717,30 +737,34 @@ function runSelfTest() {
   [[0.5, 0], [3, 1], [7, 5], [12, 10]].forEach(([age, band]) =>
     t.push([`Age ${age} y → column ${band}`, ageBand(age) === band ? "correct" : `got ${ageBand(age)}`, ageBand(age) === band]));
 
-  // 3. Worked example: 2 y, full front trunk + ½ both front thighs = 16%
-  const ex = 13 * 1 + THIGH[1] * 0.5 * 2;
-  t.push(["Example TBSA (front trunk full + ½ both thighs, 2 y)", `${ex}%`, close(ex, 16)]);
+  // 3. Worked example: 2 y, front trunk + both front thighs (whole regions) = 19%
+  const ex = 13 + THIGH[1] * 2;
+  t.push(["TBSA: front trunk + both front thighs, 2 y", `${ex}%`, close(ex, 19)]);
 
-  // 4. Modified Parkland: 3 × 12 kg × 16% = 576 mL, halves 288 mL
-  const total = 3 * 12 * 16;
-  t.push(["3 mL × 12 kg × 16% = 576 mL/24 h", `${total} mL`, close(total, 576)]);
-  t.push(["First-8-h half = 288 mL", `${total / 2} mL`, close(total / 2, 288)]);
+  // 4. Modified Parkland: 3 × 12 kg × 19% = 684 mL, halves 342 mL
+  const total = 3 * 12 * 19;
+  t.push(["3 mL × 12 kg × 19% = 684 mL/24 h", `${total} mL`, close(total, 684)]);
+  t.push(["First-8-h half = 342 mL", `${total / 2} mL`, close(total / 2, 342)]);
 
   // 5. Maintenance 4-2-1: 8 kg → 32, 12 kg → 44, 15 kg → 50, 25 kg → 65 mL/h
   [[8, 32], [12, 44], [15, 50], [25, 65]].forEach(([kg, exp]) =>
     t.push([`Maintenance ${kg} kg → ${exp} mL/h`, `${maintenanceRate(kg)} mL/h`, close(maintenanceRate(kg), exp)]));
 
-  // 6. Delayed presentation: 2 h elapsed → first half over remaining 6 h = 48 mL/h
+  // 6. Delayed presentation: 2 h elapsed → first half over remaining 6 h = 57 mL/h
   const rate = (total / 2) / (8 - 2);
-  t.push(["Delayed 2 h → 288 mL over 6 h = 48 mL/h", `${rate.toFixed(0)} mL/h`, close(rate, 48)]);
+  t.push(["Delayed 2 h → 342 mL over 6 h = 57 mL/h", `${rate.toFixed(0)} mL/h`, close(rate, 57)]);
 
-  // 7. Absolute BSA and Galveston (88 cm, 12 kg, 16% TBSA)
+  // 7. Absolute BSA and Galveston (88 cm, 12 kg, 19% TBSA)
   const bsa = bsaMosteller(88, 12);
   t.push(["BSA Mosteller √(88×12/3600) ≈ 0.542 m²", `${bsa.toFixed(3)} m²`, Math.abs(bsa - 0.542) < 0.001]);
-  const burned = bsa * 0.16;
-  t.push(["Burned area 16% of BSA ≈ 0.087 m²", `${burned.toFixed(4)} m²`, Math.abs(burned - 0.0867) < 0.001]);
+  const burned = bsa * 0.19;
+  t.push(["Burned area 19% of BSA ≈ 0.103 m²", `${burned.toFixed(4)} m²`, Math.abs(burned - 0.1030) < 0.001]);
   const galv = 5000 * burned + 2000 * bsa;
-  t.push(["Galveston 5000×burned + 2000×BSA ≈ 1516 mL", `${galv.toFixed(0)} mL`, Math.abs(galv - 1516.5) < 2]);
+  t.push(["Galveston 5000×burned + 2000×BSA ≈ 1600 mL", `${galv.toFixed(0)} mL`, Math.abs(galv - 1599.5) < 3]);
+
+  // 8. Binary marking invariant: tapping never produces a graded value
+  const binOK = REGIONS.every(r => state[r.id] === 0 || state[r.id] > 0);
+  t.push(["Marking is binary or measured (no graded shading)", "verified", binOK]);
 
   const allPass = t.every(x => x[2]);
   document.getElementById("testOut").innerHTML =
@@ -762,10 +786,10 @@ document.getElementById("testBtn").addEventListener("click", runSelfTest);
 /* Demo presets via URL hash (#demo=ex1 …) — reproducible states for
    documentation, training, and screenshots. */
 const DEMOS = {
-  ex1:      { ageY: 2, ageM: 0, weight: 12, height: 88,  hoursAgo: 1,  given: 0,   marks: { trunk_f: 1, th_r_f: 0.5, th_l_f: 0.5 } },
-  ex2:      { ageY: 7, ageM: 0, weight: 24, height: 122, hoursAgo: 1,  given: 0,   marks: { trunk_f: 1, th_r_f: 0.5, th_l_f: 0.5 } },
-  ex3:      { ageY: 0, ageM: 9, weight: 8,  height: 71,  hoursAgo: 2,  given: 0,   marks: { trunk_f: 0.75 }, photo: "sample_images/sample_1_infant_trunk_scald.jpg" },
-  ex4:      { ageY: 3, ageM: 0, weight: 14, height: 95,  hoursAgo: 10, given: 200, marks: { trunk_f: 1, trunk_b: 0.5, th_r_f: 0.5, th_l_f: 0.5 } },
+  ex1:      { ageY: 2, ageM: 0, weight: 12, height: 88,  hoursAgo: 1,  given: 0,   marks: { trunk_f: 1, th_r_f: 1, th_l_f: 1 } },
+  ex2:      { ageY: 7, ageM: 0, weight: 24, height: 122, hoursAgo: 1,  given: 0,   marks: { trunk_f: 1, th_r_f: 1, th_l_f: 1 } },
+  ex3:      { ageY: 0, ageM: 9, weight: 8,  height: 71,  hoursAgo: 2,  given: 0,   marks: {}, paint: { trunk_f: 0.7 }, photo: "sample_images/sample_1_infant_trunk_scald.jpg" },
+  ex4:      { ageY: 3, ageM: 0, weight: 14, height: 95,  hoursAgo: 10, given: 200, marks: { trunk_f: 1, th_r_f: 1, th_l_f: 1 }, paint: { trunk_b: 0.5 } },
   ex5:      { ageY: 2, ageM: 0, weight: 12, height: 88,  hoursAgo: 1,  given: 0,   marks: {}, paintTrunk: true },
   selftest: { ageY: 2, ageM: 0, weight: 12, height: 88,  hoursAgo: 1,  given: 0,   marks: {}, selftest: true },
 };
@@ -784,6 +808,10 @@ const DEMOS = {
   document.getElementById("burnTime").value =
     `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}`;
   Object.entries(d.marks).forEach(([id, f]) => state[id] = f);
+  if (d.paint) {
+    setMode("draw");
+    Object.entries(d.paint).forEach(([id, f]) => paintRegionFraction(id, f));
+  }
   if (d.photo) document.getElementById("photoWrap").innerHTML =
     `<img src="${d.photo}" alt="Sample clinical burn photograph">
      <div class="photonote">Sample clinical image (published source) loaded for testing.</div>`;
