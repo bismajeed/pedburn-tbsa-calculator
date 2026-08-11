@@ -6,7 +6,7 @@
 
 An age-aware, single-file web application that measures the percentage of Total Body Surface Area (TBSA) burned in a child and converts it into a complete fluid resuscitation plan — deterministically, reproducibly, and in under a minute at the bedside.
 
-![PedBurn overview](docs/screenshots/overview.png)
+![PedBurn in use — tap a region, trace an irregular burn, get the fluid plan](docs/pedburn-demo.gif)
 
 ---
 
